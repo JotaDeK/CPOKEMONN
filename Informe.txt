@@ -1,0 +1,482 @@
+INFORME TECNICO DEL PROYECTO
+POKEMON BATTLE SIMULATOR - main.c
+
+============================================================
+1) OBJETIVO DEL PROYECTO
+============================================================
+Este proyecto implementa un simulador de combate por turnos en consola.
+El diseno combina:
+- PILAS (LIFO) para administrar acciones de cada Pokemon.
+- COLA CIRCULAR para administrar el orden de turnos de participantes.
+- Registro de eventos en memoria y exportacion a archivo.
+- Registro y reproduccion de partidas mediante ACCIONES.TXT.
+
+La aplicacion esta escrita en C y esta orientada a entorno de consola.
+
+
+============================================================
+2) ARQUITECTURA GENERAL
+============================================================
+El sistema esta organizado en bloques:
+1. Definiciones y constantes globales.
+2. Estructuras de datos.
+3. Prototipos de funciones.
+4. Implementacion de pilas.
+5. Implementacion de cola circular.
+6. Logica de Pokemon y carga de acciones.
+7. Logica de combate y turnos.
+8. Capa de archivos (registro y replay).
+9. Capa UI (menus, barras de vida, mensajes, animaciones).
+10. Capa de utilidades de refactorizacion (helpers reutilizables).
+11. Configuracion de partida.
+12. Loop principal del juego y salida.
+
+
+============================================================
+3) CONSTANTES Y CONFIGURACION
+============================================================
+Constantes principales:
+- MAX_NOMBRE = 21
+  Tamano maximo del nombre del Pokemon.
+- MAX_ENTRENADOR = 31
+  Tamano maximo del nombre del jugador real (entrenador).
+- MAX_TIPO_ACCION = 20
+  Tamano del texto del tipo de accion.
+- MAX_JUGADORES = 6
+  Limite superior para estructuras de cola y liberacion.
+- MAX_ACCIONES = 10
+  Maximo de acciones por Pokemon en la pila.
+- MAX_HISTORIAL = 200
+  Maximo de eventos del historial en memoria.
+- MAX_ACCIONES_REPLAY = 400
+  Maximo de acciones almacenadas para reproduccion.
+
+Compatibilidad de plataforma:
+- En Windows usa Sleep(ms) y comando "cls" para limpiar consola.
+- En otros sistemas usa usleep y "clear".
+
+
+============================================================
+4) ESTRUCTURAS DE DATOS
+============================================================
+4.1) Accion
+Representa un nodo de pila.
+Campos:
+- tipo: ataque, defensa, especial, mover.
+- nombre: nombre del movimiento.
+- poder: magnitud base de dano o efecto.
+- precision: porcentaje de acierto (0..100).
+- descripcion: texto para UI.
+- sig: siguiente nodo en la pila.
+
+4.2) Pokemon
+Representa un participante en combate.
+Campos clave:
+- nombre: nombre del Pokemon.
+- entrenador: nombre del jugador/persona/IA.
+- salud, saludMax, defensa, velocidad.
+- estaVivo.
+- pilaAcciones y numAcciones.
+- sig: siguiente en la cola circular.
+
+Nota importante:
+El juego muestra ahora como principal el entrenador, y entre parentesis el
+Pokemon. Esto mejora legibilidad para partidas humanas.
+
+4.3) ColaTurnos
+Cola circular para turnos.
+Campos:
+- frente: jugador actual.
+- final: ultimo de la cola.
+- total: numero de participantes.
+
+4.4) HistorialCombate
+Arreglo de eventos en memoria.
+- eventos[MAX_HISTORIAL][150]
+- cantidad
+
+4.5) EstadoJuego
+Agrupa estado global de la partida:
+- cola
+- historial
+- turnoActual
+- modoAutomatico
+- jugador1EsHumano / jugador2EsHumano
+- modoRepeticion
+- semillaPartida
+
+4.6) RegistroAccionReplay
+Estructura para almacenar acciones leidas de ACCIONES.TXT.
+- atacante (nombre de Pokemon)
+- accion
+
+Variables globales de replay:
+- g_accionesReplay[]
+- g_totalAccionesReplay
+- g_indiceAccionReplay
+- g_semillaReplay
+
+
+============================================================
+5) PILAS: IMPLEMENTACION Y COMPORTAMIENTO
+============================================================
+5.1) crearAccion
+Reserva memoria para una accion y llena campos de texto/estadisticas.
+Retorna puntero o NULL si falla malloc.
+
+5.2) pushAccion
+Inserta nodo en tope de pila (O(1)).
+- Si se excede MAX_ACCIONES, descarta la nueva accion.
+
+5.3) popAccion
+Extrae tope (O(1)) y decrementa numAcciones.
+- Retorna nodo extraido para ser usado/liberado.
+
+5.4) peekAccion
+Consulta tope sin extraer.
+
+5.5) liberarPilaAcciones
+Hace pop repetido y free de nodos.
+
+5.6) extraerAccionPorNombre
+Utilidad para replay:
+- Hace pop hasta hallar una accion por nombre.
+- Reinyecta nodos temporales para mantener orden relativo.
+- Si no encuentra nombre, usa pop del tope como fallback.
+
+5.7) extraerAccionPorIndice
+Utilidad de limpieza para turno del jugador:
+- Encapsula la extraccion de la accion elegida por posicion de menu.
+- Mantiene semantica de pila y evita duplicar logica en turnoJugador.
+
+Regla de negocio actual de acciones:
+Las acciones se CONSUMEN.
+Cada accion usada se extrae y luego se libera (free), por lo que la pila se
+reduce durante el combate.
+
+
+============================================================
+6) COLA CIRCULAR: IMPLEMENTACION Y COMPORTAMIENTO
+============================================================
+6.1) inicializarCola
+Pone frente/final en NULL, total=0.
+
+6.2) encolarJugador
+Inserta participante al final en O(1).
+Mantiene circularidad:
+- Si primer nodo: sig apunta a si mismo.
+- Si hay varios: final->sig apunta al nuevo y nuevo->sig al frente.
+
+6.3) frenteCola
+Devuelve puntero al jugador en turno.
+
+6.4) avanzarTurno
+Mueve frente al siguiente (frente = frente->sig).
+
+6.5) eliminarDeCola
+Elimina un participante especifico (usado al KO) en O(n).
+Resuelve:
+- caso de un solo elemento.
+- actualizacion de frente/final.
+- ruptura del sig del eliminado.
+
+Nota:
+Existe prototipo de desencolarJugador, pero no se implementa ni se usa.
+No afecta ejecucion actual.
+
+
+============================================================
+7) MODELO DE POKEMON Y ORIGEN DE DATOS
+============================================================
+7.1) crearPokemon
+Construye entidad Pokemon con estadisticas iniciales.
+- saludMax = salud inicial.
+- entrenador se inicializa por defecto con el nombre del Pokemon,
+  y luego se sobreescribe en modos humanos.
+
+7.2) cargarAccionesDefault
+Fuente principal del repertorio de acciones.
+Crea lista de acciones segun tipo:
+- Fuego
+- Agua
+- Planta
+- Electrico
+- Psiquico
+- Normal (fallback)
+
+Cada tipo recibe 8 acciones predefinidas.
+Orden:
+Se hace push de varias acciones, por lo que la ultima agregada queda al tope.
+
+7.3) liberarPokemon
+Libera pila y luego estructura Pokemon.
+
+7.4) Tabla POKEMON_DISPONIBLES
+Fuente de seleccion en menu:
+- nombre, tipo, emoji, salud, defensa, velocidad.
+
+7.5) crearPokemonDesdeNombreTemplate
+Utilidad para replay legacy:
+- Dado nombre de Pokemon, busca en tabla y crea instancia completa.
+
+
+============================================================
+8) LOGICA DE COMBATE Y ATAQUES
+============================================================
+8.1) calcularDanio
+Formula de dano para ataques/especiales:
+- factor aleatorio uniforme entre 0.80 y 1.20.
+- danio base = poder * factor.
+- reduccion por defensa = defensa/4.
+- tope de reduccion: maximo 50% del dano calculado.
+- dano minimo final: 1.
+
+Con esto, la defensa nunca anula completamente un ataque de poder > 0.
+
+8.2) ejecutarAccion
+Procesa tipos de accion:
+A) precision
+- Se tira un numero aleatorio 1..100.
+- Si tirada > precision, la accion falla.
+
+B) ataque/especial
+- Calcula dano real.
+- Resta salud del defensor.
+- Marca KO si salud llega a 0.
+- Registra evento en historial.
+
+C) defensa
+- "Proteccion": +15 defensa.
+- "Sintesis" o "Refugio": cura 25..44 aleatorio.
+- Otras defensas: +10 defensa.
+
+D) mover
+- Solo mensaje y log de reposicionamiento.
+
+8.3) Probabilidades y aleatoriedad reales
+Fuentes aleatorias:
+- dano variable por factor 0.8..1.2
+- precision (acierto/fallo)
+- magnitud de curacion en ciertos movimientos
+- seleccion de Pokemon IA en setup
+
+Semilla:
+- cada partida genera semilla basada en time(NULL)
+- semilla se guarda en ACCIONES.TXT para replay
+- replay restaura semilla para reproducibilidad aproximada
+
+Importante:
+Aunque la semilla se restaure, la fidelidad depende de que la secuencia de
+llamadas a rand() sea equivalente al combate original.
+
+
+============================================================
+9) TURNOS: HUMANO, IA Y REPLAY
+============================================================
+9.1) turnoJugador
+- Construye lista temporal de acciones disponibles desde la pila.
+- Muestra menu numerado con poder/precision/descripcion.
+- Si opcion invalida: usa primera disponible.
+- Extrae accion elegida mediante helper por indice, respetando semantica de pila.
+- Ejecuta accion.
+- Registra accion en ACCIONES.TXT.
+- Libera accion usada.
+
+9.2) turnoIA
+Estrategia simple:
+- Si vida < 30% y hay defensa: usa defensa.
+- Sino usa primer ataque/especial disponible.
+- Si no hay ataque, usa defensa.
+- Si no hay nada mejor, usa tope.
+Luego ejecuta, registra y libera accion.
+
+9.3) turnoRepeticion
+- Lee siguiente accion de g_accionesReplay.
+- Intenta extraer esa accion por nombre.
+- Si no encuentra, usa fallback (tope).
+- Ejecuta y libera accion.
+
+Mensajes de control:
+- avisa si el atacante esperado por archivo no coincide con turno actual.
+
+
+============================================================
+10) SISTEMA DE ARCHIVOS
+============================================================
+10.1) ACCIONES.TXT (fuente de replay y registro)
+Formato actual:
+- SEED;<numero>
+- P1;<pokemon>;<tipo>;<emoji>;<hp>;<def>;<vel>;<entrenador>
+- P2;<pokemon>;<tipo>;<emoji>;<hp>;<def>;<vel>;<entrenador>
+- <turno>;<pokemon_atacante>;<accion>
+
+10.2) cargarAccionesDeArchivo
+Hace:
+- reset de buffers replay
+- parse de SEED
+- parse de P1/P2 para reconstruir participantes
+- parse de lista de acciones
+- compatibilidad legacy: si no hay P1/P2, infiere por nombres atacantes
+  y crea desde tabla interna de templates
+- valida que haya al menos 2 participantes y >=1 accion
+
+10.3) iniciarRegistroAcciones
+Al comenzar partida normal:
+- sobreescribe ACCIONES.TXT
+- escribe semilla
+- escribe cabeceras P1/P2 completas con entrenador
+
+10.4) registrarAccionEnArchivo
+En cada accion ejecutada en partida normal:
+- append de linea turno;atacante;accion
+
+10.5) guardarHistorial
+Exporta historial de eventos a historial_batalla.txt.
+
+
+============================================================
+11) UI Y EXPERIENCIA DE USUARIO
+============================================================
+11.1) mostrarTitulo
+Cabecera ASCII del juego.
+
+11.2) mostrarBarraVida
+Muestra por participante:
+- emoji
+- entrenador (principal)
+- Pokemon entre parentesis
+- barra visual de HP de longitud 30
+- color por porcentaje de vida
+- defensa y acciones restantes
+
+11.3) mostrarEstadoBatalla
+Render principal.
+- modo normal: limpia pantalla cada turno.
+- modo replay: limpia solo al inicio para no borrar avance visual.
+
+11.4) animarAtaque
+Animacion textual corta por ataque.
+
+11.5) pedirNombreJugador
+Entrada robusta para nombres humanos.
+- usa valor por defecto si entrada vacia/falla.
+
+11.6) etiquetaParticipante
+Compone etiqueta:
+- si entrenador == Pokemon, muestra solo Pokemon.
+- si difieren, muestra "Entrenador (Pokemon)".
+
+11.7) Helpers de limpieza y consistencia
+- copiarTextoSeguro: centraliza copias de cadenas con terminacion segura.
+- consumirEntradaHastaNuevaLinea: evita duplicar bucles getchar para ENTER.
+- colorTipoAccion: centraliza el mapeo tipo de accion -> color ANSI.
+
+11.8) Menus
+- Menu principal: 4 modos + salida.
+- Menu post-batalla: ver historial, guardar, reiniciar, salir.
+
+
+============================================================
+12) CONFIGURACION DE MODOS
+============================================================
+Modo 1: Humano vs Humano
+- Solicita nombre de ambos jugadores.
+- Ambos eligen Pokemon manualmente.
+
+Modo 2: Humano vs Maquina
+- Solicita nombre del jugador humano.
+- Humano elige Pokemon; IA elige aleatorio.
+
+Modo 3: Maquina vs Maquina
+- IA selecciona ambos Pokemon.
+
+Modo 4: Replay desde ACCIONES.TXT
+- Carga todo desde archivo.
+- Activa modoRepeticion.
+- Usa semilla del archivo si existe.
+- Avanza accion por accion con ENTER.
+
+
+============================================================
+13) FLUJO DE EJECUCION COMPLETO
+============================================================
+1. main inicializa semilla y estado.
+2. configurarPartidaConsola define modo y participantes.
+3. Si no es replay, se inicializa ACCIONES.TXT para registrar.
+4. jugar ejecuta loop hasta quedar un solo vivo:
+   - seleccion atacante por cola
+   - busca defensor vivo
+   - renderiza estado
+   - ejecuta turno (humano/IA/replay)
+   - procesa KO y elimina de cola
+   - avanza turno
+   - pide ENTER segun modo
+5. mostrar resultado final.
+6. menu post-batalla (historial/guardar/reiniciar/salir).
+7. opcion de jugar nuevamente.
+
+
+============================================================
+14) GESTION DE MEMORIA
+============================================================
+Puntos clave:
+- Acciones se reservan dinamicamente y se liberan tras uso.
+- Pokemon se reservan dinamicamente y se liberan al final.
+- liberarJuego rompe circularidad antes de liberar para evitar ciclos.
+- En errores de carga replay invalida, se llama liberarJuego.
+
+
+============================================================
+15) COMPLEJIDADES (APROXIMADAS)
+============================================================
+- push/pop/peek de pila: O(1)
+- encolar/frente/avanzar cola circular: O(1)
+- eliminarDeCola: O(n)
+- buscarEnemigoVivo: O(n)
+- render estado por turno: O(n)
+- turnoJugador/turnoIA: depende de acciones, acotado por MAX_ACCIONES.
+
+
+============================================================
+16) ORIGEN DE CADA DATO (TRAZABILIDAD)
+============================================================
+- Estadisticas base Pokemon: tabla POKEMON_DISPONIBLES.
+- Repertorio de acciones: cargarAccionesDefault segun tipo.
+- Nombres humanos: entrada por teclado con pedirNombreJugador.
+- Decisiones de usuario: stdin via fgets.
+- Sanitizacion de copias de texto: helper copiarTextoSeguro.
+- Decisiones IA: reglas simples + rand.
+- Replay y semilla: ACCIONES.TXT.
+- Historial visible/exportable: HistorialCombate en memoria + archivo.
+
+
+============================================================
+17) LIMITACIONES CONOCIDAS
+============================================================
+1. Prototipo desencolarJugador declarado pero no implementado/uso.
+2. Determinismo de replay depende de secuencia de rand; cambios en el codigo
+   pueden alterar fidelidad exacta entre versiones.
+3. El ganador en mostrarResultado imprime emoji + nombre Pokemon, no etiqueta
+   completa entrenador (se puede extender facilmente).
+4. No hay validaciones profundas de consistencia del archivo replay
+   (por ejemplo, numero de turnos consecutivos o nombres de accion invalidos).
+
+
+============================================================
+18) RESUMEN EJECUTIVO
+============================================================
+El sistema actual modela correctamente:
+- cola circular de turnos,
+- pilas de acciones consumibles,
+- combate con precision, dano variable y defensa,
+- modos humano/IA,
+- registro y reproduccion de partidas desde un unico archivo ACCIONES.TXT,
+- mejora de UX con nombres de jugadores y avance manual en replay,
+- y refactorizacion interna con helpers para reducir duplicacion sin alterar comportamiento.
+
+Con este documento, una persona sin contexto previo puede entender:
+- estructura interna,
+- reglas del combate,
+- flujo de ejecucion,
+- impacto de la aleatoriedad,
+- y formato de los archivos de soporte.
