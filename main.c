@@ -68,6 +68,14 @@ typedef struct Accion {
     struct Accion* sig;          /* enlace al siguiente nodo de la pila */
 } Accion;
 
+typedef struct {
+    const char* tipo;
+    const char* nombre;
+    int poder;
+    int precision;
+    const char* descripcion;
+} AccionBase;
+
 /* ============================================================
  *  ESTRUCTURA: Pokemon  (jugador/entidad)
  *  Contiene su pila de acciones y datos de estado.
@@ -161,6 +169,7 @@ void     liberarPokemon(Pokemon* p);
 
 /* --- Logica del juego --- */
 int  calcularDanio(Accion* ataque, Pokemon* atacante, Pokemon* defensor);
+double obtenerMultiplicadorTipos(const char* tipoAtacante, const char* tipoDefensor);
 void ejecutarAccion(Accion* accion, Pokemon* atacante, Pokemon* defensor,
                     HistorialCombate* hist);
 void turnoJugador(EstadoJuego* estado, Pokemon* atacante, Pokemon* defensor);
@@ -198,6 +207,7 @@ void pedirNombreJugador(char* destino, int tam, const char* nombreDefault,
 void etiquetaParticipante(const Pokemon* p, char* out, int outSize);
 void consumirEntradaHastaNuevaLinea(void);
 const char* colorTipoAccion(const char* tipo);
+const char* colorTipoPokemon(const char* tipo);
 
 /* --- Setup --- */
 void configurarPartidaConsola(EstadoJuego* estado);
@@ -304,6 +314,16 @@ const char* colorTipoAccion(const char* tipo) {
     if (strcmp(tipo, "especial") == 0) return COLOR_MAGENTA;
     if (strcmp(tipo, "defensa") == 0) return COLOR_CYAN;
     if (strcmp(tipo, "mover") == 0) return COLOR_VERDE;
+    return COLOR_BLANCO;
+}
+
+const char* colorTipoPokemon(const char* tipo) {
+    if (!tipo) return COLOR_BLANCO;
+    if (strcmp(tipo, "Fuego") == 0) return COLOR_ROJO;
+    if (strcmp(tipo, "Agua") == 0) return COLOR_AZUL;
+    if (strcmp(tipo, "Planta") == 0) return COLOR_VERDE;
+    if (strcmp(tipo, "Electrico") == 0) return COLOR_AMARILLO;
+    if (strcmp(tipo, "Psiquico") == 0) return COLOR_MAGENTA;
     return COLOR_BLANCO;
 }
 
@@ -485,64 +505,93 @@ Pokemon* crearPokemon(const char* nombre, const char* tipo,
  * archivo ACCIONES.TXT sin cambiar el resto del codigo.
  */
 void cargarAccionesDefault(Pokemon* p) {
+    static const AccionBase ACCIONES_FUEGO[] = {
+        {"ataque", "Lanzallamas",   90, 100, "Onda de fuego abrasadora"},
+        {"especial", "Explosion",   150, 80, "Explosion devastadora"},
+        {"ataque", "Ascuas",        40, 100, "Chispa de fuego basica"},
+        {"defensa", "Pantalla Luz",  0, 100, "Reduce daño especial"},
+        {"ataque", "Giro Fuego",    60, 85, "Atrapa al rival en llamas"},
+        {"especial", "Lanzallamas+",110, 90, "Version potenciada"},
+        {"ataque", "Llamarada",    120, 85, "Ataque de fuego supremo"},
+        {"defensa", "Proteccion",    0, 100, "Bloquea el proximo ataque"}
+    };
+    static const AccionBase ACCIONES_AGUA[] = {
+        {"ataque", "Pistola Agua",  40, 100, "Chorro de agua basico"},
+        {"ataque", "Surf",          90, 100, "Ola gigante devastadora"},
+        {"especial", "Hidrobomba", 110, 80, "Bomba de agua explosiva"},
+        {"defensa", "Refugio",       0, 100, "Sube la defensa"},
+        {"ataque", "Acua Cola",     90, 100, "Golpe de cola mojada"},
+        {"especial", "Lluvia Danza", 0, 100, "Potencia ataques de agua"},
+        {"ataque", "Cascada",       80, 100, "Ataque potente de agua"},
+        {"defensa", "Proteccion",    0, 100, "Bloquea el proximo ataque"}
+    };
+    static const AccionBase ACCIONES_PLANTA[] = {
+        {"ataque", "Latigo Cepa",    45, 100, "Golpe con zarcillo vegetal"},
+        {"ataque", "Hoja Aguda",     55, 95, "Hojas cortantes"},
+        {"especial", "Rayo Solar",  120, 100, "Energia solar acumulada"},
+        {"defensa", "Sintesis",       0, 100, "Cura puntos de vida"},
+        {"ataque", "Tormenta Hojas",130, 90, "Lluvia de hojas afiladas"},
+        {"especial", "Danza Petal",   0, 100, "Sube el ataque special"},
+        {"ataque", "Drenadoras",     20, 100, "Drena vida del rival"},
+        {"defensa", "Proteccion",     0, 100, "Bloquea el proximo ataque"}
+    };
+    static const AccionBase ACCIONES_ELECTRICO[] = {
+        {"ataque", "Impactrueno",   40, 100, "Descarga electrica basica"},
+        {"ataque", "Rayo",         110, 70, "Rayo del cielo"},
+        {"especial", "Trueno",     120, 70, "Tormenta electrica total"},
+        {"defensa", "Agilidad",      0, 100, "Duplica la velocidad"},
+        {"ataque", "Bola Voltio",   90, 100, "Esfera de electricidad"},
+        {"especial", "Rayo+",      130, 75, "Version suprema del rayo"},
+        {"ataque", "Chispa",        65, 100, "Chispa cargada"},
+        {"defensa", "Proteccion",    0, 100, "Bloquea el proximo ataque"}
+    };
+    static const AccionBase ACCIONES_PSIQUICO[] = {
+        {"ataque", "Confusion",     50, 100, "Onda psionica basica"},
+        {"especial", "Psicoataque",100, 80, "Golpe mental devastador"},
+        {"ataque", "Psiquico",      90, 100, "Ola psiquica poderosa"},
+        {"defensa", "Amnesia",       0, 100, "Sube defensa especial"},
+        {"especial", "Premonicion",120, 90, "Ve el futuro y ataca"},
+        {"ataque", "Telequinesis",  50, 100, "Lanza objetos con la mente"},
+        {"defensa", "Intercambio",   0, 100, "Cambia estadisticas"},
+        {"defensa", "Proteccion",    0, 100, "Bloquea el proximo ataque"}
+    };
+    static const AccionBase ACCIONES_NORMAL[] = {
+        {"ataque", "Placaje",       40, 100, "Golpe de cuerpo basico"},
+        {"ataque", "Golpe Cuerpo",  85, 100, "Golpe con todo el cuerpo"},
+        {"especial", "Hiperrayo",  150, 90, "El ataque mas poderoso"},
+        {"defensa", "Fortaleza",     0, 100, "Aumenta la defensa"},
+        {"ataque", "Rapidez",       80, 100, "Golpe a alta velocidad"},
+        {"especial", "Tesoro",     110, 85, "Ataque sorpresa"},
+        {"ataque", "Cabezazo",      70, 80, "Golpe en la cabeza"},
+        {"defensa", "Proteccion",    0, 100, "Bloquea el proximo ataque"}
+    };
+    const AccionBase* set = ACCIONES_NORMAL;
+    int cantidad = (int)(sizeof(ACCIONES_NORMAL) / sizeof(ACCIONES_NORMAL[0]));
+    int i;
+
     /* Limpia la pila antes de cargar */
     liberarPilaAcciones(p);
 
     if (strcmp(p->tipo, "Fuego") == 0) {
-        pushAccion(p, crearAccion("ataque",  "Lanzallamas",   90, 100, "Onda de fuego abrasadora"));
-        pushAccion(p, crearAccion("especial","Explosion",    150,  80, "Explosion devastadora"));
-        pushAccion(p, crearAccion("ataque",  "Ascuas",        40, 100, "Chispa de fuego basica"));
-        pushAccion(p, crearAccion("defensa", "Pantalla Luz",  0,  100, "Reduce daño especial"));
-        pushAccion(p, crearAccion("ataque",  "Giro Fuego",    60,  85, "Atrapa al rival en llamas"));
-        pushAccion(p, crearAccion("especial","Lanzallamas+", 110,  90, "Version potenciada"));
-        pushAccion(p, crearAccion("ataque",  "Llamarada",    120,  85, "Ataque de fuego supremo"));
-        pushAccion(p, crearAccion("defensa", "Proteccion",    0,  100, "Bloquea el proximo ataque"));
+        set = ACCIONES_FUEGO;
+        cantidad = (int)(sizeof(ACCIONES_FUEGO) / sizeof(ACCIONES_FUEGO[0]));
     } else if (strcmp(p->tipo, "Agua") == 0) {
-        pushAccion(p, crearAccion("ataque",  "Pistola Agua",  40, 100, "Chorro de agua basico"));
-        pushAccion(p, crearAccion("ataque",  "Surf",          90, 100, "Ola gigante devastadora"));
-        pushAccion(p, crearAccion("especial","Hidrobomba",   110,  80, "Bomba de agua explosiva"));
-        pushAccion(p, crearAccion("defensa", "Refugio",       0,  100, "Sube la defensa"));
-        pushAccion(p, crearAccion("ataque",  "Acua Cola",     90, 100, "Golpe de cola mojada"));
-        pushAccion(p, crearAccion("especial","Lluvia Danza",  0,  100, "Potencia ataques de agua"));
-        pushAccion(p, crearAccion("ataque",  "Cascada",       80, 100, "Ataque potente de agua"));
-        pushAccion(p, crearAccion("defensa", "Proteccion",    0,  100, "Bloquea el proximo ataque"));
+        set = ACCIONES_AGUA;
+        cantidad = (int)(sizeof(ACCIONES_AGUA) / sizeof(ACCIONES_AGUA[0]));
     } else if (strcmp(p->tipo, "Planta") == 0) {
-        pushAccion(p, crearAccion("ataque",  "Latigo Cepa",   45, 100, "Golpe con zarcillo vegetal"));
-        pushAccion(p, crearAccion("ataque",  "Hoja Aguda",    55,  95, "Hojas cortantes"));
-        pushAccion(p, crearAccion("especial","Rayo Solar",   120,  100,"Energia solar acumulada"));
-        pushAccion(p, crearAccion("defensa", "Sintesis",      0,  100, "Cura puntos de vida"));
-        pushAccion(p, crearAccion("ataque",  "Tormenta Hojas",130, 90, "Lluvia de hojas afiladas"));
-        pushAccion(p, crearAccion("especial","Danza Petal",   0,  100, "Sube el ataque special"));
-        pushAccion(p, crearAccion("ataque",  "Drenadoras",    20,  100,"Drena vida del rival"));
-        pushAccion(p, crearAccion("defensa", "Proteccion",    0,  100, "Bloquea el proximo ataque"));
+        set = ACCIONES_PLANTA;
+        cantidad = (int)(sizeof(ACCIONES_PLANTA) / sizeof(ACCIONES_PLANTA[0]));
     } else if (strcmp(p->tipo, "Electrico") == 0) {
-        pushAccion(p, crearAccion("ataque",  "Impactrueno",   40, 100, "Descarga electrica basica"));
-        pushAccion(p, crearAccion("ataque",  "Rayo",         110,  70, "Rayo del cielo"));
-        pushAccion(p, crearAccion("especial","Trueno",       120,  70, "Tormenta electrica total"));
-        pushAccion(p, crearAccion("defensa", "Agilidad",      0,  100, "Duplica la velocidad"));
-        pushAccion(p, crearAccion("ataque",  "Bola Voltio",   90, 100, "Esfera de electricidad"));
-        pushAccion(p, crearAccion("especial","Rayo+",        130,  75, "Version suprema del rayo"));
-        pushAccion(p, crearAccion("ataque",  "Chispa",        65, 100, "Chispa cargada"));
-        pushAccion(p, crearAccion("defensa", "Proteccion",    0,  100, "Bloquea el proximo ataque"));
+        set = ACCIONES_ELECTRICO;
+        cantidad = (int)(sizeof(ACCIONES_ELECTRICO) / sizeof(ACCIONES_ELECTRICO[0]));
     } else if (strcmp(p->tipo, "Psiquico") == 0) {
-        pushAccion(p, crearAccion("ataque",  "Confusion",     50, 100, "Onda psionica basica"));
-        pushAccion(p, crearAccion("especial","Psicoataque",  100,  80, "Golpe mental devastador"));
-        pushAccion(p, crearAccion("ataque",  "Psiquico",      90, 100, "Ola psiquica poderosa"));
-        pushAccion(p, crearAccion("defensa", "Amnesia",       0,  100, "Sube defensa especial"));
-        pushAccion(p, crearAccion("especial","Premonicion",  120,  90, "Ve el futuro y ataca"));
-        pushAccion(p, crearAccion("ataque",  "Telequinesis",  50, 100, "Lanza objetos con la mente"));
-        pushAccion(p, crearAccion("defensa", "Intercambio",   0,  100, "Cambia estadisticas"));
-        pushAccion(p, crearAccion("defensa", "Proteccion",    0,  100, "Bloquea el proximo ataque"));
-    } else {
-        /* Tipo Normal - acciones genericas */
-        pushAccion(p, crearAccion("ataque",  "Placaje",       40, 100, "Golpe de cuerpo basico"));
-        pushAccion(p, crearAccion("ataque",  "Golpe Cuerpo",  85, 100, "Golpe con todo el cuerpo"));
-        pushAccion(p, crearAccion("especial","Hiperrayo",    150,  90, "El ataque mas poderoso"));
-        pushAccion(p, crearAccion("defensa", "Fortaleza",     0,  100, "Aumenta la defensa"));
-        pushAccion(p, crearAccion("ataque",  "Rapidez",       80, 100, "Golpe a alta velocidad"));
-        pushAccion(p, crearAccion("especial","Tesoro",       110,  85, "Ataque sorpresa"));
-        pushAccion(p, crearAccion("ataque",  "Cabezazo",      70,  80, "Golpe en la cabeza"));
-        pushAccion(p, crearAccion("defensa", "Proteccion",    0,  100, "Bloquea el proximo ataque"));
+        set = ACCIONES_PSIQUICO;
+        cantidad = (int)(sizeof(ACCIONES_PSIQUICO) / sizeof(ACCIONES_PSIQUICO[0]));
+    }
+
+    for (i = 0; i < cantidad; i++) {
+        pushAccion(p, crearAccion(set[i].tipo, set[i].nombre, set[i].poder,
+                                  set[i].precision, set[i].descripcion));
     }
 }
 
@@ -565,21 +614,62 @@ void liberarPokemon(Pokemon* p) {
  * Rango: poder * 0.8 a poder * 1.2, reducido por defensa.
  */
 int calcularDanio(Accion* ataque, Pokemon* atacante, Pokemon* defensor) {
-    (void)atacante; /* reservado para futuras bonificaciones de atributos */
     if (!ataque || ataque->poder == 0) return 0;
 
-    /* Variacion aleatoria +/-20% */
-    double factor = 0.8 + ((rand() % 41) / 100.0); /* 0.80 a 1.20 */
+    /* Variacion aleatoria moderada para reducir golpes extremos. */
+    double factor = 0.85 + ((rand() % 26) / 100.0); /* 0.85 a 1.10 */
+    double efectividad = 1.0;
+    int especial = (strcmp(ataque->tipo, "especial") == 0);
 
     int danio = (int)(ataque->poder * factor);
+    if (especial) {
+        danio = (int)(danio * 1.08); /* especial conserva ventaja ligera */
+    }
 
-    /* Reduccion por defensa (maximo 50% de absorcion) */
-    int reduccion = defensor->defensa / 4;
-    if (reduccion > danio / 2) reduccion = danio / 2;
+    /* Reduccion por defensa mas fuerte para alargar los combates. */
+    int reduccion = defensor->defensa / 2;
+    if (reduccion > (danio * 6) / 10) reduccion = (danio * 6) / 10;
     danio -= reduccion;
+
+    /* Escalado global y counters por tipo. */
+    efectividad = obtenerMultiplicadorTipos(atacante->tipo, defensor->tipo);
+    danio = (int)(danio * 0.72 * efectividad);
+
+    /* Evita KO inmediato desde vida completa en la mayoria de casos. */
+    if (defensor->salud == defensor->saludMax) {
+        int tope = especial ? (defensor->saludMax * 62) / 100
+                            : (defensor->saludMax * 52) / 100;
+        if (danio > tope) danio = tope;
+    }
 
     if (danio < 1) danio = 1;
     return danio;
+}
+
+double obtenerMultiplicadorTipos(const char* tipoAtacante, const char* tipoDefensor) {
+    if (!tipoAtacante || !tipoDefensor) return 1.0;
+
+    if (strcmp(tipoAtacante, "Fuego") == 0) {
+        if (strcmp(tipoDefensor, "Planta") == 0) return 1.40;
+        if (strcmp(tipoDefensor, "Agua") == 0) return 0.78;
+    } else if (strcmp(tipoAtacante, "Agua") == 0) {
+        if (strcmp(tipoDefensor, "Fuego") == 0) return 1.38;
+        if (strcmp(tipoDefensor, "Planta") == 0) return 0.80;
+        if (strcmp(tipoDefensor, "Electrico") == 0) return 0.90;
+    } else if (strcmp(tipoAtacante, "Planta") == 0) {
+        if (strcmp(tipoDefensor, "Agua") == 0) return 1.38;
+        if (strcmp(tipoDefensor, "Fuego") == 0) return 0.78;
+    } else if (strcmp(tipoAtacante, "Electrico") == 0) {
+        if (strcmp(tipoDefensor, "Agua") == 0) return 1.45;
+        if (strcmp(tipoDefensor, "Planta") == 0) return 0.80;
+    } else if (strcmp(tipoAtacante, "Psiquico") == 0) {
+        if (strcmp(tipoDefensor, "Normal") == 0) return 1.20;
+        if (strcmp(tipoDefensor, "Psiquico") == 0) return 0.92;
+    } else if (strcmp(tipoAtacante, "Normal") == 0) {
+        if (strcmp(tipoDefensor, "Psiquico") == 0) return 0.95;
+    }
+
+    return 1.0;
 }
 
 /*
@@ -611,6 +701,7 @@ void ejecutarAccion(Accion* accion, Pokemon* atacante, Pokemon* defensor,
         strcmp(accion->tipo, "especial") == 0) {
 
         int danio = calcularDanio(accion, atacante, defensor);
+        double efectividad = obtenerMultiplicadorTipos(atacante->tipo, defensor->tipo);
         defensor->salud -= danio;
         if (defensor->salud < 0) defensor->salud = 0;
 
@@ -623,6 +714,11 @@ void ejecutarAccion(Accion* accion, Pokemon* atacante, Pokemon* defensor,
         if (strcmp(accion->tipo, "especial") == 0) {
             printf(COLOR_MAGENTA "  *** ATAQUE ESPECIAL: %s ***\n" COLOR_RESET,
                    accion->nombre);
+        }
+        if (efectividad >= 1.20) {
+            printf(COLOR_AMARILLO "  Es super efectivo!\n" COLOR_RESET);
+        } else if (efectividad <= 0.85) {
+            printf(COLOR_GRIS "  No es muy efectivo...\n" COLOR_RESET);
         }
         printf(COLOR_ROJO "  Daño causado: %d puntos!\n" COLOR_RESET, danio);
         printf("  %s -> Vida: %d/%d\n",
@@ -1306,18 +1402,39 @@ typedef struct {
 } PokemonTemplate;
 
 static const PokemonTemplate POKEMON_DISPONIBLES[] = {
-    {"Charizard",   "Fuego",     "[C]", 110, 12, 85},
-    {"Blastoise",   "Agua",      "[B]", 105, 18, 78},
-    {"Venusaur",    "Planta",    "[V]", 108, 16, 75},
-    {"Pikachu",     "Electrico", "[P]", 90,  10, 95},
-    {"Mewtwo",      "Psiquico",  "[M]", 130, 14, 90},
-    {"Machamp",     "Normal",    "[X]", 115, 20, 70},
-    {"Gengar",      "Psiquico",  "[G]", 95,  8,  100},
-    {"Arcanine",    "Fuego",     "[A]", 100, 14, 92},
-    {"Gyarados",    "Agua",      "[Y]", 120, 16, 80},
-    {"Exeggutor",   "Planta",    "[E]", 100, 15, 65},
+    {"Charizard",   "Fuego",     "[C]", 126, 16, 85},
+    {"Blastoise",   "Agua",      "[B]", 132, 22, 78},
+    {"Venusaur",    "Planta",    "[V]", 130, 20, 75},
+    {"Pikachu",     "Electrico", "[P]", 112, 14, 95},
+    {"Mewtwo",      "Psiquico",  "[M]", 140, 18, 90},
+    {"Machamp",     "Normal",    "[X]", 138, 24, 70},
+    {"Gengar",      "Psiquico",  "[G]", 116, 13, 100},
+    {"Arcanine",    "Fuego",     "[A]", 124, 18, 92},
+    {"Gyarados",    "Agua",      "[Y]", 144, 20, 80},
+    {"Exeggutor",   "Planta",    "[E]", 128, 19, 65},
 };
 #define NUM_POKEMON_DISPONIBLES 10
+
+static Pokemon* crearPokemonDesdeTemplateIndice(int indice, const char* entrenador) {
+    Pokemon* p;
+    if (indice < 0 || indice >= NUM_POKEMON_DISPONIBLES) return NULL;
+
+    p = crearPokemon(
+        POKEMON_DISPONIBLES[indice].nombre,
+        POKEMON_DISPONIBLES[indice].tipo,
+        POKEMON_DISPONIBLES[indice].emoji,
+        POKEMON_DISPONIBLES[indice].salud,
+        POKEMON_DISPONIBLES[indice].defensa,
+        POKEMON_DISPONIBLES[indice].velocidad
+    );
+    if (!p) return NULL;
+
+    if (entrenador) {
+        copiarTextoSeguro(p->entrenador, MAX_ENTRENADOR, entrenador);
+    }
+    cargarAccionesDefault(p);
+    return p;
+}
 
 Pokemon* crearPokemonDesdeNombreTemplate(const char* nombre) {
     int i;
@@ -1325,16 +1442,7 @@ Pokemon* crearPokemonDesdeNombreTemplate(const char* nombre) {
 
     for (i = 0; i < NUM_POKEMON_DISPONIBLES; i++) {
         if (strcmp(POKEMON_DISPONIBLES[i].nombre, nombre) == 0) {
-            Pokemon* p = crearPokemon(
-                POKEMON_DISPONIBLES[i].nombre,
-                POKEMON_DISPONIBLES[i].tipo,
-                POKEMON_DISPONIBLES[i].emoji,
-                POKEMON_DISPONIBLES[i].salud,
-                POKEMON_DISPONIBLES[i].defensa,
-                POKEMON_DISPONIBLES[i].velocidad
-            );
-            if (p) cargarAccionesDefault(p);
-            return p;
+            return crearPokemonDesdeTemplateIndice(i, NULL);
         }
     }
     return NULL;
@@ -1347,12 +1455,7 @@ void mostrarPokemonDisponibles(void) {
     printf("\n  Pokemon disponibles:\n\n");
     int i;
     for (i = 0; i < NUM_POKEMON_DISPONIBLES; i++) {
-        const char* colorTipo = COLOR_BLANCO;
-        if (strcmp(POKEMON_DISPONIBLES[i].tipo, "Fuego") == 0) colorTipo = COLOR_ROJO;
-        else if (strcmp(POKEMON_DISPONIBLES[i].tipo, "Agua") == 0) colorTipo = COLOR_AZUL;
-        else if (strcmp(POKEMON_DISPONIBLES[i].tipo, "Planta") == 0) colorTipo = COLOR_VERDE;
-        else if (strcmp(POKEMON_DISPONIBLES[i].tipo, "Electrico") == 0) colorTipo = COLOR_AMARILLO;
-        else if (strcmp(POKEMON_DISPONIBLES[i].tipo, "Psiquico") == 0) colorTipo = COLOR_MAGENTA;
+        const char* colorTipo = colorTipoPokemon(POKEMON_DISPONIBLES[i].tipo);
 
         printf("  %s[%2d]%s %s%-12s%s | Tipo: %s%-9s%s | HP:%3d | DEF:%2d | VEL:%3d\n",
                COLOR_CYAN, i + 1, COLOR_RESET,
@@ -1389,17 +1492,8 @@ Pokemon* elegirPokemon(const char* nombreJugador, int esHumano) {
     if (opcion < 1 || opcion > NUM_POKEMON_DISPONIBLES) opcion = 1;
     opcion--; /* indice base 0 */
 
-    Pokemon* p = crearPokemon(
-        POKEMON_DISPONIBLES[opcion].nombre,
-        POKEMON_DISPONIBLES[opcion].tipo,
-        POKEMON_DISPONIBLES[opcion].emoji,
-        POKEMON_DISPONIBLES[opcion].salud,
-        POKEMON_DISPONIBLES[opcion].defensa,
-        POKEMON_DISPONIBLES[opcion].velocidad
-    );
+    Pokemon* p = crearPokemonDesdeTemplateIndice(opcion, nombreJugador);
     if (!p) return NULL;
-    copiarTextoSeguro(p->entrenador, MAX_ENTRENADOR, nombreJugador);
-    cargarAccionesDefault(p);
     printf(COLOR_VERDE "\n  %s ha elegido a %s %s!\n\n" COLOR_RESET,
            nombreJugador, p->emoji, p->nombre);
     SLEEP(600);
@@ -1618,6 +1712,10 @@ void jugar(EstadoJuego* estado) {
 
         if (estado->modoRepeticion) {
             printf(COLOR_GRIS "\n  [REPLAY] Presiona ENTER para la siguiente accion..." COLOR_RESET);
+            fflush(stdout);
+            consumirEntradaHastaNuevaLinea();
+        } else if (estado->modoAutomatico) {
+            printf(COLOR_GRIS "\n  [IA vs IA] Presiona ENTER para la siguiente accion..." COLOR_RESET);
             fflush(stdout);
             consumirEntradaHastaNuevaLinea();
         }
