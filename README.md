@@ -11,7 +11,7 @@ make
 ./pokemon_battle
 
 # Windows (MinGW)
-gcc -Wall -Wextra -std=c99 -o pokemon_battle.exe main.c
+gcc -Wall -Wextra -std=c99 -o pokemon_battle.exe main.c core.c combat.c file_io.c ui.c
 pokemon_battle.exe
 ```
 
@@ -28,6 +28,16 @@ pokemon_battle.exe
 | `ColaTurnos` | **Cola circular** | Orden de turnos (FIFO circular) |
 | `EstadoJuego` | Agregador | Todo el estado de la partida |
 | `HistorialCombate` | Arreglo | Registro de eventos |
+
+### Modulos del proyecto
+
+| Archivo | Responsabilidad |
+|---|---|
+| `core.c` | Estructuras base, colas, pilas, Pokemon y utilidades comunes |
+| `combat.c` | Daño, ejecucion de acciones y bucle principal de batalla |
+| `file_io.c` | Repeticion, historial y persistencia de acciones |
+| `ui.c` | Consola, menus, seleccion de Pokemon y configuracion |
+| `main.c` | Punto de entrada y orquestacion |
 
 ### Flujo de ejecucion
 

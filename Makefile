@@ -6,7 +6,7 @@
 CC      = gcc
 CFLAGS  = -Wall -Wextra -std=c99 -g
 TARGET  = pokemon_battle
-SRC     = main.c
+SRC     = main.c core.c combat.c file_io.c ui.c
 
 all: $(TARGET)
 
@@ -18,6 +18,6 @@ $(TARGET): $(SRC)
 	@echo ""
 
 clean:
-	rm -f $(TARGET) historial_batalla.txt
+	rm -f $(TARGET) historial_batalla.txt ACCIONES.TXT
 
 .PHONY: all clean
