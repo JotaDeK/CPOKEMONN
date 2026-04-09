@@ -1,0 +1,14 @@
+SEED;1775756108
+P1;Gyarados;Agua;[Y];144;20;80;Johan
+P2;Mewtwo;Psiquico;[M];140;18;90;Daniel
+1;Gyarados;Surf
+2;Mewtwo;Intercambio
+3;Gyarados;Pistola Agua
+4;Mewtwo;Telequinesis
+5;Gyarados;Hidrobomba
+6;Mewtwo;Psicoataque
+7;Gyarados;Acua Cola
+8;Mewtwo;Premonicion
+9;Gyarados;Lluvia Danza
+10;Mewtwo;Psiquico
+11;Gyarados;Cascada
