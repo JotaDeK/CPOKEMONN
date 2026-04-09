@@ -1,7 +1,9 @@
-SEED;1775660309
-P1;Gyarados;Agua;[Y];144;20;80;Johan
-P2;Exeggutor;Planta;[E];128;19;65;2
-1;Gyarados;Surf
-2;Exeggutor;Tormenta Hojas
-3;Gyarados;Proteccion
-4;Exeggutor;Rayo Solar
+SEED;1775232494
+P1;Arcanine;Fuego;[A];100;14;92;Johan
+P2;Mewtwo;Psiquico;[M];130;14;90;Juan
+1;Arcanine;Pantalla Luz
+2;Mewtwo;Confusion
+3;Arcanine;Llamarada
+4;Mewtwo;Amnesia
+5;Arcanine;Giro Fuego
+6;Mewtwo;Psiquico
