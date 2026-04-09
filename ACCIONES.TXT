@@ -1,9 +1,0 @@
-SEED;1775232494
-P1;Arcanine;Fuego;[A];100;14;92;Johan
-P2;Mewtwo;Psiquico;[M];130;14;90;Juan
-1;Arcanine;Pantalla Luz
-2;Mewtwo;Confusion
-3;Arcanine;Llamarada
-4;Mewtwo;Amnesia
-5;Arcanine;Giro Fuego
-6;Mewtwo;Psiquico

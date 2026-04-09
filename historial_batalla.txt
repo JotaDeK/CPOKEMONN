@@ -1,5 +1,0 @@
-=== HISTORIAL DE COMBATE POKEMON ===
-
-[DEFENSA] Exeggutor uso Proteccion (efecto=15)
-[ATAQUE] Machamp uso Tesoro -> 108 de daño a Exeggutor (vida restante: 0)
-[KO] Exeggutor fue derrotado por Machamp
